@@ -1,4 +1,4 @@
-const VERSION = 'drgekspedisi-v5';
+const VERSION = 'drgekspedisi-v6';
 const STATIC_CACHE = `${VERSION}-static`;
 const PAGE_CACHE = `${VERSION}-pages`;
 const INERTIA_CACHE = `${VERSION}-inertia`;
@@ -42,8 +42,11 @@ const isCacheableResponse = (response) => {
         return false;
     }
 
+    // Laravel lazim memberi `Cache-Control: no-cache, private` pada halaman
+    // publik. Karena rute akun sudah dipisahkan di atas, response publik tetap
+    // aman disimpan di cache browser perangkat ini. Hanya `no-store` ditolak.
     const cacheControl = response.headers.get('Cache-Control') || '';
-    return !/(no-store|private)/i.test(cacheControl);
+    return !/no-store/i.test(cacheControl);
 };
 
 const cloneForCache = (response) => {
@@ -52,8 +55,7 @@ const cloneForCache = (response) => {
     }
 
     try {
-        // Clone harus dibuat sinkron, sebelum browser atau operasi async lain
-        // mulai membaca response body.
+        // Clone dibuat sinkron sebelum operasi async lain membaca body.
         return response.clone();
     } catch (error) {
         console.warn('[PWA] Response tidak dapat di-clone untuk cache.', error);
@@ -98,8 +100,7 @@ self.addEventListener('install', (event) => {
                 })
             );
 
-            // Ambil alih segera agar service worker lama yang menyebabkan
-            // error clone dan referensi ikon lama tidak terus mengontrol tab.
+            // Service worker baru langsung menggantikan versi lama yang error.
             await self.skipWaiting();
         })()
     );
@@ -134,14 +135,14 @@ const networkOnlyWithOfflineFallback = async (request) => {
 
 const networkFirstNavigation = async (request) => {
     const cache = await caches.open(PAGE_CACHE);
-    const canonicalRequest = canonicalPageRequest(request);
+    const cacheKey = canonicalPageRequest(request);
 
     try {
         const response = await fetch(request);
-        await putSafely(cache, canonicalRequest, response);
+        await putSafely(cache, cacheKey, response);
         return response;
     } catch (error) {
-        return (await cache.match(canonicalRequest)) || offlinePage();
+        return (await cache.match(cacheKey)) || offlinePage();
     }
 };
 
@@ -172,19 +173,22 @@ const networkFirstInertia = async (request) => {
     }
 };
 
-const staleWhileRevalidate = async (request) => {
+const staleWhileRevalidate = async (event) => {
+    const { request } = event;
     const cache = await caches.open(STATIC_CACHE);
     const cached = await cache.match(request);
 
     const networkPromise = fetch(request)
         .then(async (response) => {
-            // putSafely membuat clone secara sinkron sebelum await pertama.
             await putSafely(cache, request, response);
             return response;
         })
         .catch(() => null);
 
     if (cached) {
+        // Pastikan proses pembaruan cache tetap hidup setelah cached response
+        // dikembalikan kepada halaman.
+        event.waitUntil(networkPromise.then(() => undefined));
         return cached;
     }
 
@@ -221,9 +225,9 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    const isInertiaRequest = request.headers.get('X-Inertia') === 'true';
+    const inertiaRequest = request.headers.get('X-Inertia') === 'true';
 
-    if (isInertiaRequest) {
+    if (inertiaRequest) {
         event.respondWith(
             isPrivatePath(url.pathname)
                 ? networkOnlyWithOfflineFallback(request)
@@ -242,7 +246,7 @@ self.addEventListener('fetch', (event) => {
     }
 
     if (['style', 'script', 'image', 'font', 'manifest'].includes(request.destination)) {
-        event.respondWith(staleWhileRevalidate(request));
+        event.respondWith(staleWhileRevalidate(event));
     }
 });
 
@@ -255,6 +259,7 @@ self.addEventListener('message', (event) => {
         event.waitUntil(
             (async () => {
                 const cache = await caches.open(PAGE_CACHE);
+
                 await Promise.allSettled(
                     PUBLIC_PAGE_PATHS.map(async (path) => {
                         const request = new Request(path, { headers: { Accept: 'text/html' } });
