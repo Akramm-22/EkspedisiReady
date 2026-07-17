@@ -1,83 +1,177 @@
-const CACHE_NAME = 'drgekspedisi-v1';
-const APP_SHELL = ['/', '/manifest.json'];
+const VERSION = 'drgekspedisi-v3';
+const STATIC_CACHE = `${VERSION}-static`;
+const PAGE_CACHE = `${VERSION}-pages`;
+const OFFLINE_URL = '/offline.html';
 
-// Install: cache app shell minimal (halaman utama + manifest). Vite build
-// assets (JS/CSS ber-hash) di-cache on-demand lewat fetch handler di bawah,
-// bukan di-precache di sini supaya tidak perlu update SW tiap kali build.
+const PRECACHE_URLS = [
+    OFFLINE_URL,
+    '/manifest.json',
+    '/icons/icon.svg',
+    '/icons/icon-maskable.svg',
+    '/pwa-register.js',
+];
+
+const PRIVATE_PREFIXES = [
+    '/admin',
+    '/customer',
+    '/courier',
+    '/login',
+    '/logout',
+    '/shipments',
+    '/pembayaran',
+];
+
+const isPrivatePath = (pathname) =>
+    PRIVATE_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+
+const isCacheableResponse = (response) =>
+    response && response.ok && (response.type === 'basic' || response.type === 'cors');
+
 self.addEventListener('install', (event) => {
-    event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
-    self.skipWaiting();
+    event.waitUntil(caches.open(STATIC_CACHE).then((cache) => cache.addAll(PRECACHE_URLS)));
 });
 
 self.addEventListener('activate', (event) => {
     event.waitUntil(
-        caches.keys().then((keys) =>
-            Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))
-        )
+        Promise.all([
+            caches.keys().then((keys) =>
+                Promise.all(
+                    keys
+                        .filter((key) => key.startsWith('drgekspedisi-') && ![STATIC_CACHE, PAGE_CACHE].includes(key))
+                        .map((key) => caches.delete(key))
+                )
+            ),
+            self.clients.claim(),
+        ])
     );
-    self.clients.claim();
 });
 
-// Strategy: network-first untuk API (data harus fresh), cache-first untuk
-// asset statis (JS/CSS/gambar) supaya app shell tetap kebuka saat offline.
+const networkOnlyWithOfflineFallback = async (request) => {
+    try {
+        return await fetch(request);
+    } catch (error) {
+        if (request.mode === 'navigate') {
+            return (await caches.match(OFFLINE_URL)) || Response.error();
+        }
+
+        throw error;
+    }
+};
+
+const networkFirstPage = async (request) => {
+    const cache = await caches.open(PAGE_CACHE);
+
+    try {
+        const response = await fetch(request);
+        if (isCacheableResponse(response)) {
+            await cache.put(request, response.clone());
+        }
+        return response;
+    } catch (error) {
+        return (await cache.match(request)) || (await caches.match(OFFLINE_URL)) || Response.error();
+    }
+};
+
+const staleWhileRevalidate = async (request) => {
+    const cache = await caches.open(STATIC_CACHE);
+    const cached = await cache.match(request);
+
+    const network = fetch(request)
+        .then(async (response) => {
+            if (isCacheableResponse(response)) {
+                await cache.put(request, response.clone());
+            }
+            return response;
+        })
+        .catch(() => cached);
+
+    return cached || network;
+};
+
 self.addEventListener('fetch', (event) => {
     const { request } = event;
-    const url = new URL(request.url);
 
-    if (url.pathname.startsWith('/api/')) {
-        event.respondWith(
-            fetch(request).catch(() =>
-                new Response(JSON.stringify({ message: 'Sedang offline. Aksi ini akan disinkronkan otomatis.' }), {
-                    status: 503,
-                    headers: { 'Content-Type': 'application/json' },
-                })
-            )
-        );
-
+    if (request.method !== 'GET') {
         return;
     }
 
-    event.respondWith(
-        caches.match(request).then((cached) => {
-            const network = fetch(request)
-                .then((response) => {
-                    if (response.ok) {
-                        caches.open(CACHE_NAME).then((cache) => cache.put(request, response.clone()));
-                    }
+    const url = new URL(request.url);
 
-                    return response;
-                })
-                .catch(() => cached);
+    if (url.origin !== self.location.origin) {
+        return;
+    }
 
-            return cached || network;
-        })
-    );
-});
+    if (url.pathname.startsWith('/api/')) {
+        event.respondWith(
+            fetch(request).catch(
+                () =>
+                    new Response(JSON.stringify({ message: 'Tidak ada koneksi. Silakan coba lagi saat online.' }), {
+                        status: 503,
+                        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+                    })
+            )
+        );
+        return;
+    }
 
-// Background Sync: dipicu browser otomatis begitu koneksi kembali, PWA
-// register tag ini dari sisi client (lihat app kurir) setelah action
-// offline disimpan ke IndexedDB. Actual replay logic (baca IndexedDB,
-// POST ke /api/v1/courier/sync) ada di kode aplikasi, bukan di SW ini,
-// supaya SW tetap ringan & tidak bergantung ke library HTTP client.
-self.addEventListener('sync', (event) => {
-    if (event.tag === 'drg-offline-sync') {
-        event.waitUntil(self.clients.matchAll().then((clients) => {
-            clients.forEach((client) => client.postMessage({ type: 'TRIGGER_OFFLINE_SYNC' }));
-        }));
+    const isPageRequest = request.mode === 'navigate' || request.headers.get('X-Inertia') === 'true';
+
+    if (isPageRequest) {
+        event.respondWith(
+            isPrivatePath(url.pathname)
+                ? networkOnlyWithOfflineFallback(request)
+                : networkFirstPage(request)
+        );
+        return;
+    }
+
+    if (['style', 'script', 'image', 'font'].includes(request.destination)) {
+        event.respondWith(staleWhileRevalidate(request));
     }
 });
 
-// Push notification (FCM via Web Push) — menampilkan notifikasi native
-// browser saat ada pesan masuk dari FcmPushService di backend.
+self.addEventListener('message', (event) => {
+    if (event.data?.type === 'SKIP_WAITING') {
+        self.skipWaiting();
+    }
+});
+
+self.addEventListener('sync', (event) => {
+    if (event.tag === 'drg-offline-sync') {
+        event.waitUntil(
+            self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+                clients.forEach((client) => client.postMessage({ type: 'TRIGGER_OFFLINE_SYNC' }));
+            })
+        );
+    }
+});
+
 self.addEventListener('push', (event) => {
     const data = event.data?.json() ?? {};
 
     event.waitUntil(
         self.registration.showNotification(data.notification?.title ?? 'drgEkspedisi', {
             body: data.notification?.body ?? '',
-            icon: '/icons/icon-192.png',
-            badge: '/icons/icon-192.png',
+            icon: '/icons/icon.svg',
+            badge: '/icons/icon.svg',
             data: data.data ?? {},
+        })
+    );
+});
+
+self.addEventListener('notificationclick', (event) => {
+    event.notification.close();
+    const targetUrl = event.notification.data?.url || '/';
+
+    event.waitUntil(
+        self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (clients) => {
+            const existing = clients.find((client) => new URL(client.url).origin === self.location.origin);
+            if (existing) {
+                await existing.focus();
+                existing.navigate(targetUrl);
+                return;
+            }
+            await self.clients.openWindow(targetUrl);
         })
     );
 });

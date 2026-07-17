@@ -1,16 +1,47 @@
 {
   "name": "drgEkspedisi",
   "short_name": "drgEkspedisi",
-  "description": "Platform pengiriman barang terpadu — kirim, lacak, dan kelola pengiriman Anda.",
-  "start_url": "/",
+  "id": "/",
+  "description": "Platform pengiriman barang terpadu untuk kirim, lacak, dan mengelola pengiriman.",
+  "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",
-  "orientation": "portrait",
-  "background_color": "#ffffff",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "orientation": "any",
+  "lang": "id-ID",
+  "dir": "ltr",
+  "background_color": "#f8fafc",
   "theme_color": "#18b378",
+  "categories": ["business", "productivity", "utilities"],
   "icons": [
-    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Beranda",
+      "short_name": "Beranda",
+      "url": "/?source=shortcut"
+    },
+    {
+      "name": "Lacak Pengiriman",
+      "short_name": "Lacak",
+      "url": "/lacak?source=shortcut"
+    },
+    {
+      "name": "Tentang Kami",
+      "short_name": "Tentang",
+      "url": "/tentang?source=shortcut"
+    }
   ]
 }
