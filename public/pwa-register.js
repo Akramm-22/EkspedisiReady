@@ -13,7 +13,7 @@
         return;
     }
 
-    window.addEventListener('load', async () => {
+    const registerWorker = async () => {
         try {
             const registration = await navigator.serviceWorker.register('/service-worker.js', { scope: '/' });
 
@@ -30,7 +30,13 @@
         } catch (error) {
             console.error('Service worker gagal didaftarkan:', error);
         }
-    });
+    };
+
+    if (document.readyState === 'complete') {
+        registerWorker();
+    } else {
+        window.addEventListener('load', registerWorker, { once: true });
+    }
 
     let refreshing = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
