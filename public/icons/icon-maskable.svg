@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">drgEkspedisi maskable</title>
+  <defs>
+    <linearGradient id="brand" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#18b378"/>
+      <stop offset="1" stop-color="#0786c7"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#brand)"/>
+  <circle cx="256" cy="256" r="176" fill="#fff" opacity=".12"/>
+  <path d="M165 151h91c80 0 131 41 131 105s-51 105-131 105h-91V151Zm84 158c46 0 73-19 73-53s-27-53-73-53h-19v106h19Z" fill="#fff"/>
+  <path d="M132 230h66v52h-66c-15 0-26-11-26-26s11-26 26-26Z" fill="#fff" opacity=".9"/>
+</svg>
