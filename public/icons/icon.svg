@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">drgEkspedisi</title>
+  <defs>
+    <linearGradient id="brand" x1="64" y1="64" x2="448" y2="448" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#18b378"/>
+      <stop offset="1" stop-color="#0786c7"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#brand)"/>
+  <path d="M150 132h105c92 0 151 48 151 124s-59 124-151 124H150V132Zm96 188c54 0 86-23 86-64s-32-64-86-64h-24v128h24Z" fill="#fff"/>
+  <path d="M112 224h78v64h-78c-18 0-32-14-32-32s14-32 32-32Z" fill="#fff" opacity=".88"/>
+</svg>
