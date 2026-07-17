@@ -6,6 +6,39 @@ import Alpine from 'alpinejs';
 import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
 
+const ensurePwaMetadata = () => {
+    if (!document.querySelector('meta[name="theme-color"]')) {
+        const theme = document.createElement('meta');
+        theme.name = 'theme-color';
+        theme.content = '#18b378';
+        document.head.appendChild(theme);
+    }
+
+    if (!document.querySelector('link[rel="manifest"]')) {
+        const manifest = document.createElement('link');
+        manifest.rel = 'manifest';
+        manifest.href = '/manifest.json';
+        document.head.appendChild(manifest);
+    }
+
+    if (!document.querySelector('link[rel="icon"]')) {
+        const icon = document.createElement('link');
+        icon.rel = 'icon';
+        icon.type = 'image/svg+xml';
+        icon.href = '/icons/icon.svg';
+        document.head.appendChild(icon);
+    }
+
+    if (!document.querySelector('script[data-pwa-register]')) {
+        const script = document.createElement('script');
+        script.src = '/pwa-register.js';
+        script.dataset.pwaRegister = 'true';
+        document.head.appendChild(script);
+    }
+};
+
+ensurePwaMetadata();
+
 window.Alpine = Alpine;
 Alpine.start();
 
